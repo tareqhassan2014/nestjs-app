@@ -180,10 +180,12 @@ export class ApiKeyManagerService {
 
   // Encryption/Decryption methods
   private encrypt(text: string): string {
-    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+    const ENCRYPTION_KEY = process.env.YOUTUBE_API_KEY_ENCRYPTION_KEY;
 
     if (!ENCRYPTION_KEY) {
-      throw new Error('ENCRYPTION_KEY environment variable is not set');
+      throw new Error(
+        'YOUTUBE_API_KEY_ENCRYPTION_KEY environment variable is not set',
+      );
     }
 
     const salt = crypto.randomBytes(this.SALT_LENGTH);
@@ -205,10 +207,12 @@ export class ApiKeyManagerService {
   }
 
   private decrypt(encryptedText: string): string {
-    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+    const ENCRYPTION_KEY = process.env.YOUTUBE_API_KEY_ENCRYPTION_KEY;
 
     if (!ENCRYPTION_KEY) {
-      throw new Error('ENCRYPTION_KEY environment variable is not set');
+      throw new Error(
+        'YOUTUBE_API_KEY_ENCRYPTION_KEY environment variable is not set',
+      );
     }
 
     const buffer = Buffer.from(encryptedText, 'hex');
