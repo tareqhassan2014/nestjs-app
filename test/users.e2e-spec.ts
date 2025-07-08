@@ -47,9 +47,9 @@ describe('Users (e2e)', () => {
   describe('/users (POST)', () => {
     it('should create a new user', () => {
       const createUserDto: CreateUserDto = {
-        name: 'John Doe',
+        firstName: 'John',
+        lastName: 'Doe',
         email: 'john@example.com',
-        age: 30,
       };
 
       return request(app.getHttpServer())
@@ -57,9 +57,9 @@ describe('Users (e2e)', () => {
         .send(createUserDto)
         .expect(201)
         .expect((res) => {
-          expect(res.body.name).toBe(createUserDto.name);
+          expect(res.body.firstName).toBe(createUserDto.firstName);
+          expect(res.body.lastName).toBe(createUserDto.lastName);
           expect(res.body.email).toBe(createUserDto.email);
-          expect(res.body.age).toBe(createUserDto.age);
           expect(res.body.isActive).toBe(true);
           expect(res.body._id).toBeDefined();
           expect(res.body.createdAt).toBeDefined();
@@ -67,10 +67,13 @@ describe('Users (e2e)', () => {
         });
     });
 
-    it('should create a user without age', () => {
+    it('should create a user with optional fields', () => {
       const createUserDto: CreateUserDto = {
-        name: 'Jane Doe',
+        firstName: 'Jane',
+        lastName: 'Doe',
         email: 'jane@example.com',
+        image: 'https://example.com/jane.jpg',
+        hasCourseAccess: true,
       };
 
       return request(app.getHttpServer())
@@ -78,9 +81,11 @@ describe('Users (e2e)', () => {
         .send(createUserDto)
         .expect(201)
         .expect((res) => {
-          expect(res.body.name).toBe(createUserDto.name);
+          expect(res.body.firstName).toBe(createUserDto.firstName);
+          expect(res.body.lastName).toBe(createUserDto.lastName);
           expect(res.body.email).toBe(createUserDto.email);
-          expect(res.body.age).toBeUndefined();
+          expect(res.body.image).toBe(createUserDto.image);
+          expect(res.body.hasCourseAccess).toBe(true);
           expect(res.body.isActive).toBe(true);
         });
     });
@@ -89,13 +94,17 @@ describe('Users (e2e)', () => {
   describe('/users (GET)', () => {
     it('should get all users', async () => {
       // First create some users
-      await request(app.getHttpServer())
-        .post('/users')
-        .send({ name: 'User 1', email: 'user1@example.com', age: 25 });
+      await request(app.getHttpServer()).post('/users').send({
+        firstName: 'User',
+        lastName: 'One',
+        email: 'user1@example.com',
+      });
 
-      await request(app.getHttpServer())
-        .post('/users')
-        .send({ name: 'User 2', email: 'user2@example.com', age: 35 });
+      await request(app.getHttpServer()).post('/users').send({
+        firstName: 'User',
+        lastName: 'Two',
+        email: 'user2@example.com',
+      });
 
       return request(app.getHttpServer())
         .get('/users')
@@ -112,7 +121,11 @@ describe('Users (e2e)', () => {
       // First create a user
       const createResponse = await request(app.getHttpServer())
         .post('/users')
-        .send({ name: 'Test User', email: 'test@example.com', age: 28 });
+        .send({
+          firstName: 'Test',
+          lastName: 'User',
+          email: 'test@example.com',
+        });
 
       const userId = createResponse.body._id;
 
@@ -121,20 +134,15 @@ describe('Users (e2e)', () => {
         .expect(200)
         .expect((res) => {
           expect(res.body._id).toBe(userId);
-          expect(res.body.name).toBe('Test User');
+          expect(res.body.firstName).toBe('Test');
+          expect(res.body.lastName).toBe('User');
           expect(res.body.email).toBe('test@example.com');
-          expect(res.body.age).toBe(28);
         });
     });
 
-    it('should return null for non-existent user', () => {
+    it('should return 404 for non-existent user', () => {
       const fakeId = '507f1f77bcf86cd799439011';
-      return request(app.getHttpServer())
-        .get(`/users/${fakeId}`)
-        .expect(200)
-        .expect((res) => {
-          expect(res.body).toEqual({});
-        });
+      return request(app.getHttpServer()).get(`/users/${fakeId}`).expect(404);
     });
   });
 
@@ -144,15 +152,15 @@ describe('Users (e2e)', () => {
       const createResponse = await request(app.getHttpServer())
         .post('/users')
         .send({
-          name: 'Original Name',
+          firstName: 'Original',
+          lastName: 'Name',
           email: 'original@example.com',
-          age: 25,
         });
 
       const userId = createResponse.body._id;
       const updateUserDto: UpdateUserDto = {
-        name: 'Updated Name',
-        age: 30,
+        firstName: 'Updated',
+        lastName: 'Name',
       };
 
       return request(app.getHttpServer())
@@ -161,9 +169,9 @@ describe('Users (e2e)', () => {
         .expect(200)
         .expect((res) => {
           expect(res.body._id).toBe(userId);
-          expect(res.body.name).toBe('Updated Name');
+          expect(res.body.firstName).toBe('Updated');
+          expect(res.body.lastName).toBe('Name');
           expect(res.body.email).toBe('original@example.com'); // unchanged
-          expect(res.body.age).toBe(30);
         });
     });
 
@@ -171,7 +179,11 @@ describe('Users (e2e)', () => {
       // First create a user
       const createResponse = await request(app.getHttpServer())
         .post('/users')
-        .send({ name: 'Active User', email: 'active@example.com' });
+        .send({
+          firstName: 'Active',
+          lastName: 'User',
+          email: 'active@example.com',
+        });
 
       const userId = createResponse.body._id;
 
@@ -191,7 +203,11 @@ describe('Users (e2e)', () => {
       // First create a user
       const createResponse = await request(app.getHttpServer())
         .post('/users')
-        .send({ name: 'To Delete', email: 'delete@example.com' });
+        .send({
+          firstName: 'To',
+          lastName: 'Delete',
+          email: 'delete@example.com',
+        });
 
       const userId = createResponse.body._id;
 
@@ -200,18 +216,16 @@ describe('Users (e2e)', () => {
         .expect(200)
         .expect((res) => {
           expect(res.body._id).toBe(userId);
-          expect(res.body.name).toBe('To Delete');
+          expect(res.body.firstName).toBe('To');
+          expect(res.body.lastName).toBe('Delete');
         });
     });
 
-    it('should return null when deleting non-existent user', () => {
+    it('should return 404 when deleting non-existent user', () => {
       const fakeId = '507f1f77bcf86cd799439011';
       return request(app.getHttpServer())
         .delete(`/users/${fakeId}`)
-        .expect(200)
-        .expect((res) => {
-          expect(res.body).toEqual({});
-        });
+        .expect(404);
     });
   });
 });

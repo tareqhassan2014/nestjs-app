@@ -1,37 +1,60 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import {
+  SubscriptionPlan,
+  SubscriptionStatus,
+} from './enums/subscription.enum';
+import { UserRole } from './enums/user-role.enum';
+import { LastWatchedVideo } from './interfaces/user.interface';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
 describe('UsersController', () => {
   let controller: UsersController;
-  let mockUsersService: any;
+  let service: UsersService;
+
+  const mockUsersService = {
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    remove: jest.fn(),
+    hardDelete: jest.fn(),
+    getActiveUsersCount: jest.fn(),
+    getInactiveUsersCount: jest.fn(),
+    getUsersByRole: jest.fn(),
+    getUsersBySubscriptionPlan: jest.fn(),
+    getUsersBySubscriptionStatus: jest.fn(),
+    getUsersWithTrialAccess: jest.fn(),
+    updateLastVisited: jest.fn(),
+    addSubscription: jest.fn(),
+    updateSubscription: jest.fn(),
+    updateLastWatchedVideo: jest.fn(),
+    updateUserRole: jest.fn(),
+    deactivateUser: jest.fn(),
+    activateUser: jest.fn(),
+    changePassword: jest.fn(),
+  };
 
   const mockUser = {
     _id: 'mockUserId',
-    name: 'John Doe',
-    email: 'john@example.com',
-    age: 30,
+    email: 'test@example.com',
+    firstName: 'John',
+    lastName: 'Doe',
+    role: UserRole.USER,
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 
-  const mockUsers = [
-    mockUser,
-    { ...mockUser, _id: 'mockUserId2', email: 'jane@example.com' },
-  ];
+  const validObjectId = '507f1f77bcf86cd799439011';
+  const invalidObjectId = 'invalid-id';
 
   beforeEach(async () => {
-    mockUsersService = {
-      create: jest.fn().mockResolvedValue(mockUser),
-      findAll: jest.fn().mockResolvedValue(mockUsers),
-      findOne: jest.fn().mockResolvedValue(mockUser),
-      update: jest.fn().mockResolvedValue(mockUser),
-      remove: jest.fn().mockResolvedValue(mockUser),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
       providers: [
@@ -43,6 +66,7 @@ describe('UsersController', () => {
     }).compile();
 
     controller = module.get<UsersController>(UsersController);
+    service = module.get<UsersService>(UsersService);
   });
 
   it('should be defined', () => {
@@ -52,167 +76,336 @@ describe('UsersController', () => {
   describe('create', () => {
     it('should create a new user', async () => {
       const createUserDto: CreateUserDto = {
-        name: 'John Doe',
-        email: 'john@example.com',
-        age: 30,
+        email: 'test@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
       };
+
+      mockUsersService.create.mockResolvedValue(mockUser);
 
       const result = await controller.create(createUserDto);
 
+      expect(service.create).toHaveBeenCalledWith(createUserDto);
       expect(result).toEqual(mockUser);
-      expect(mockUsersService.create).toHaveBeenCalledWith(createUserDto);
     });
 
-    it('should create a user without age', async () => {
+    it('should create a user with optional fields', async () => {
       const createUserDto: CreateUserDto = {
-        name: 'Jane Doe',
-        email: 'jane@example.com',
+        email: 'test@example.com',
+        firstName: 'Jane',
+        lastName: 'Doe',
+        password: 'password123',
+        role: UserRole.ADMIN,
       };
+
+      mockUsersService.create.mockResolvedValue({
+        ...mockUser,
+        ...createUserDto,
+      });
 
       const result = await controller.create(createUserDto);
 
-      expect(result).toEqual(mockUser);
-      expect(mockUsersService.create).toHaveBeenCalledWith(createUserDto);
+      expect(service.create).toHaveBeenCalledWith(createUserDto);
+      expect(result).toBeDefined();
     });
 
-    it('should handle create with all fields', async () => {
+    it('should create a user with all fields', async () => {
       const createUserDto: CreateUserDto = {
-        name: 'Full User',
         email: 'full@example.com',
-        age: 25,
+        firstName: 'Full',
+        lastName: 'User',
+        password: 'password123',
+        image: 'https://example.com/avatar.jpg',
+        role: UserRole.PRO,
+        hasCourseAccess: true,
+        isActive: true,
       };
+
+      mockUsersService.create.mockResolvedValue({
+        ...mockUser,
+        ...createUserDto,
+      });
 
       const result = await controller.create(createUserDto);
 
-      expect(result).toEqual(mockUser);
-      expect(mockUsersService.create).toHaveBeenCalledWith(createUserDto);
+      expect(result).toBeDefined();
+      expect(service.create).toHaveBeenCalledWith(createUserDto);
     });
 
-    it('should create user with minimum required fields', async () => {
+    it('should create a minimal user', async () => {
       const createUserDto: CreateUserDto = {
-        name: 'Min User',
         email: 'min@example.com',
+        firstName: 'Min',
+        lastName: 'User',
       };
+
+      mockUsersService.create.mockResolvedValue({
+        ...mockUser,
+        ...createUserDto,
+      });
 
       const result = await controller.create(createUserDto);
 
-      expect(result).toEqual(mockUser);
-      expect(mockUsersService.create).toHaveBeenCalledWith(createUserDto);
+      expect(result).toBeDefined();
+      expect(service.create).toHaveBeenCalledWith(createUserDto);
     });
   });
 
   describe('findAll', () => {
-    it('should return all users', async () => {
-      const result = await controller.findAll();
+    it('should return all active users by default', async () => {
+      const users = [mockUser];
+      mockUsersService.findAll.mockResolvedValue(users);
 
-      expect(result).toEqual(mockUsers);
-      expect(mockUsersService.findAll).toHaveBeenCalled();
+      const result = await controller.findAll('false');
+
+      expect(service.findAll).toHaveBeenCalledWith(false);
+      expect(result).toEqual(users);
     });
 
-    it('should return empty array when no users', async () => {
+    it('should return all users when includeInactive is true', async () => {
+      const users = [mockUser, { ...mockUser, isActive: false }];
+      mockUsersService.findAll.mockResolvedValue(users);
+
+      const result = await controller.findAll('true');
+
+      expect(service.findAll).toHaveBeenCalledWith(true);
+      expect(result).toEqual(users);
+    });
+
+    it('should handle empty result', async () => {
       mockUsersService.findAll.mockResolvedValue([]);
 
-      const result = await controller.findAll();
+      const result = await controller.findAll('false');
 
       expect(result).toEqual([]);
-      expect(mockUsersService.findAll).toHaveBeenCalled();
+      expect(service.findAll).toHaveBeenCalledWith(false);
     });
 
-    it('should handle large user lists', async () => {
-      const manyUsers = Array(100)
-        .fill(mockUser)
-        .map((user, index) => ({
-          ...user,
-          _id: `mockUserId${index}`,
-          email: `user${index}@example.com`,
-        }));
-      mockUsersService.findAll.mockResolvedValue(manyUsers);
+    it('should handle multiple calls', async () => {
+      const users = [mockUser];
+      mockUsersService.findAll.mockResolvedValue(users);
 
-      const result = await controller.findAll();
+      await controller.findAll('false');
+      await controller.findAll('false');
+      await controller.findAll('false');
 
-      expect(result).toEqual(manyUsers);
-      expect(result.length).toBe(100);
-      expect(mockUsersService.findAll).toHaveBeenCalled();
+      expect(service.findAll).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('getUserStats', () => {
+    it('should return user statistics', async () => {
+      mockUsersService.getActiveUsersCount.mockResolvedValue(10);
+      mockUsersService.getInactiveUsersCount.mockResolvedValue(5);
+
+      const result = await controller.getUserStats();
+
+      expect(service.getActiveUsersCount).toHaveBeenCalled();
+      expect(service.getInactiveUsersCount).toHaveBeenCalled();
+      expect(result).toEqual({
+        activeUsers: 10,
+        inactiveUsers: 5,
+        totalUsers: 15,
+      });
     });
 
-    it('should call findAll multiple times', async () => {
-      await controller.findAll();
-      await controller.findAll();
-      await controller.findAll();
+    it('should handle zero counts', async () => {
+      mockUsersService.getActiveUsersCount.mockResolvedValue(0);
+      mockUsersService.getInactiveUsersCount.mockResolvedValue(0);
 
-      expect(mockUsersService.findAll).toHaveBeenCalledTimes(3);
+      const result = await controller.getUserStats();
+
+      expect(result).toEqual({
+        activeUsers: 0,
+        inactiveUsers: 0,
+        totalUsers: 0,
+      });
+    });
+  });
+
+  describe('getUsersByRole', () => {
+    it('should return users by role', async () => {
+      const users = [mockUser];
+      mockUsersService.getUsersByRole.mockResolvedValue(users);
+
+      const result = await controller.getUsersByRole(UserRole.USER);
+
+      expect(service.getUsersByRole).toHaveBeenCalledWith(UserRole.USER);
+      expect(result).toEqual(users);
+    });
+
+    it('should handle admin role', async () => {
+      const adminUsers = [{ ...mockUser, role: UserRole.ADMIN }];
+      mockUsersService.getUsersByRole.mockResolvedValue(adminUsers);
+
+      const result = await controller.getUsersByRole(UserRole.ADMIN);
+
+      expect(service.getUsersByRole).toHaveBeenCalledWith(UserRole.ADMIN);
+      expect(result).toEqual(adminUsers);
+    });
+
+    it('should throw BadRequestException for invalid role', async () => {
+      await expect(
+        controller.getUsersByRole('INVALID_ROLE' as UserRole),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getUsersBySubscriptionPlan', () => {
+    it('should return users by subscription plan', async () => {
+      const users = [mockUser];
+      mockUsersService.getUsersBySubscriptionPlan.mockResolvedValue(users);
+
+      const result = await controller.getUsersBySubscriptionPlan(
+        SubscriptionPlan.FREE,
+      );
+
+      expect(service.getUsersBySubscriptionPlan).toHaveBeenCalledWith(
+        SubscriptionPlan.FREE,
+      );
+      expect(result).toEqual(users);
+    });
+
+    it('should handle pro plan', async () => {
+      const proUsers = [
+        { ...mockUser, subscriptionPlan: SubscriptionPlan.PRO },
+      ];
+      mockUsersService.getUsersBySubscriptionPlan.mockResolvedValue(proUsers);
+
+      const result = await controller.getUsersBySubscriptionPlan(
+        SubscriptionPlan.PRO,
+      );
+
+      expect(service.getUsersBySubscriptionPlan).toHaveBeenCalledWith(
+        SubscriptionPlan.PRO,
+      );
+      expect(result).toEqual(proUsers);
+    });
+
+    it('should throw BadRequestException for invalid plan', async () => {
+      await expect(
+        controller.getUsersBySubscriptionPlan(
+          'INVALID_PLAN' as SubscriptionPlan,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getUsersBySubscriptionStatus', () => {
+    it('should return users by subscription status', async () => {
+      const users = [mockUser];
+      mockUsersService.getUsersBySubscriptionStatus.mockResolvedValue(users);
+
+      const result = await controller.getUsersBySubscriptionStatus(
+        SubscriptionStatus.ACTIVE,
+      );
+
+      expect(service.getUsersBySubscriptionStatus).toHaveBeenCalledWith(
+        SubscriptionStatus.ACTIVE,
+      );
+      expect(result).toEqual(users);
+    });
+
+    it('should handle canceled status', async () => {
+      const canceledUsers = [
+        { ...mockUser, subscriptionStatus: SubscriptionStatus.CANCELED },
+      ];
+      mockUsersService.getUsersBySubscriptionStatus.mockResolvedValue(
+        canceledUsers,
+      );
+
+      const result = await controller.getUsersBySubscriptionStatus(
+        SubscriptionStatus.CANCELED,
+      );
+
+      expect(service.getUsersBySubscriptionStatus).toHaveBeenCalledWith(
+        SubscriptionStatus.CANCELED,
+      );
+      expect(result).toEqual(canceledUsers);
+    });
+
+    it('should throw BadRequestException for invalid status', async () => {
+      await expect(
+        controller.getUsersBySubscriptionStatus(
+          'INVALID_STATUS' as SubscriptionStatus,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getUsersWithTrialAccess', () => {
+    it('should return users with trial access', async () => {
+      const trialUsers = [{ ...mockUser, hasTrialAccess: true }];
+      mockUsersService.getUsersWithTrialAccess.mockResolvedValue(trialUsers);
+
+      const result = await controller.getUsersWithTrialAccess();
+
+      expect(service.getUsersWithTrialAccess).toHaveBeenCalled();
+      expect(result).toEqual(trialUsers);
+    });
+
+    it('should handle empty trial users', async () => {
+      mockUsersService.getUsersWithTrialAccess.mockResolvedValue([]);
+
+      const result = await controller.getUsersWithTrialAccess();
+
+      expect(result).toEqual([]);
     });
   });
 
   describe('findOne', () => {
     it('should return a user by id', async () => {
-      const result = await controller.findOne('mockUserId');
+      mockUsersService.findOne.mockResolvedValue(mockUser);
 
+      const result = await controller.findOne(validObjectId);
+
+      expect(service.findOne).toHaveBeenCalledWith(validObjectId);
       expect(result).toEqual(mockUser);
-      expect(mockUsersService.findOne).toHaveBeenCalledWith('mockUserId');
     });
 
-    it('should return null for non-existent user', async () => {
-      mockUsersService.findOne.mockResolvedValue(null);
-
-      const result = await controller.findOne('nonExistentId');
-
-      expect(result).toBeNull();
-      expect(mockUsersService.findOne).toHaveBeenCalledWith('nonExistentId');
-    });
-
-    it('should handle different id formats', async () => {
-      const testIds = ['123', 'abc123', '507f1f77bcf86cd799439011'];
-
-      for (const id of testIds) {
-        await controller.findOne(id);
-        expect(mockUsersService.findOne).toHaveBeenCalledWith(id);
-      }
-    });
-
-    it('should handle empty id', async () => {
-      await controller.findOne('');
-      expect(mockUsersService.findOne).toHaveBeenCalledWith('');
-    });
-
-    it('should handle special characters in id', async () => {
-      const specialIds = ['test-id', 'test_id', 'test.id'];
-
-      for (const id of specialIds) {
-        await controller.findOne(id);
-        expect(mockUsersService.findOne).toHaveBeenCalledWith(id);
-      }
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      await expect(controller.findOne(invalidObjectId)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 
   describe('update', () => {
     it('should update a user', async () => {
       const updateUserDto: UpdateUserDto = {
-        name: 'Updated Name',
-        age: 35,
+        firstName: 'Updated',
+        lastName: 'Name',
       };
 
-      const result = await controller.update('mockUserId', updateUserDto);
+      const updatedUser = { ...mockUser, ...updateUserDto };
+      mockUsersService.update.mockResolvedValue(updatedUser);
 
-      expect(result).toEqual(mockUser);
-      expect(mockUsersService.update).toHaveBeenCalledWith(
-        'mockUserId',
-        updateUserDto,
-      );
+      const result = await controller.update(validObjectId, updateUserDto);
+
+      expect(service.update).toHaveBeenCalledWith(validObjectId, updateUserDto);
+      expect(result).toEqual(updatedUser);
     });
 
-    it('should update user name only', async () => {
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      const updateUserDto: UpdateUserDto = { firstName: 'Updated' };
+
+      await expect(
+        controller.update(invalidObjectId, updateUserDto),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should update user firstName only', async () => {
       const updateUserDto: UpdateUserDto = {
-        name: 'New Name',
+        firstName: 'New',
       };
 
-      const result = await controller.update('mockUserId', updateUserDto);
+      const updatedUser = { ...mockUser, ...updateUserDto };
+      mockUsersService.update.mockResolvedValue(updatedUser);
 
-      expect(result).toEqual(mockUser);
-      expect(mockUsersService.update).toHaveBeenCalledWith(
-        'mockUserId',
-        updateUserDto,
-      );
+      const result = await controller.update(validObjectId, updateUserDto);
+
+      expect(service.update).toHaveBeenCalledWith(validObjectId, updateUserDto);
+      expect(result).toEqual(updatedUser);
     });
 
     it('should update user email only', async () => {
@@ -220,27 +413,27 @@ describe('UsersController', () => {
         email: 'newemail@example.com',
       };
 
-      const result = await controller.update('mockUserId', updateUserDto);
+      const updatedUser = { ...mockUser, ...updateUserDto };
+      mockUsersService.update.mockResolvedValue(updatedUser);
 
-      expect(result).toEqual(mockUser);
-      expect(mockUsersService.update).toHaveBeenCalledWith(
-        'mockUserId',
-        updateUserDto,
-      );
+      const result = await controller.update(validObjectId, updateUserDto);
+
+      expect(service.update).toHaveBeenCalledWith(validObjectId, updateUserDto);
+      expect(result).toEqual(updatedUser);
     });
 
-    it('should update user age only', async () => {
+    it('should update user role only', async () => {
       const updateUserDto: UpdateUserDto = {
-        age: 40,
+        role: UserRole.ADMIN,
       };
 
-      const result = await controller.update('mockUserId', updateUserDto);
+      const updatedUser = { ...mockUser, ...updateUserDto };
+      mockUsersService.update.mockResolvedValue(updatedUser);
 
-      expect(result).toEqual(mockUser);
-      expect(mockUsersService.update).toHaveBeenCalledWith(
-        'mockUserId',
-        updateUserDto,
-      );
+      const result = await controller.update(validObjectId, updateUserDto);
+
+      expect(service.update).toHaveBeenCalledWith(validObjectId, updateUserDto);
+      expect(result).toEqual(updatedUser);
     });
 
     it('should update user active status', async () => {
@@ -248,124 +441,343 @@ describe('UsersController', () => {
         isActive: false,
       };
 
-      const result = await controller.update('mockUserId', updateUserDto);
+      const updatedUser = { ...mockUser, ...updateUserDto };
+      mockUsersService.update.mockResolvedValue(updatedUser);
 
-      expect(result).toEqual(mockUser);
-      expect(mockUsersService.update).toHaveBeenCalledWith(
-        'mockUserId',
-        updateUserDto,
-      );
+      const result = await controller.update(validObjectId, updateUserDto);
+
+      expect(service.update).toHaveBeenCalledWith(validObjectId, updateUserDto);
+      expect(result).toEqual(updatedUser);
     });
 
     it('should update all fields', async () => {
       const updateUserDto: UpdateUserDto = {
-        name: 'Complete Update',
+        firstName: 'Complete',
+        lastName: 'Update',
         email: 'complete@example.com',
-        age: 45,
+        role: UserRole.PRO,
         isActive: false,
       };
 
-      const result = await controller.update('mockUserId', updateUserDto);
+      const updatedUser = { ...mockUser, ...updateUserDto };
+      mockUsersService.update.mockResolvedValue(updatedUser);
 
-      expect(result).toEqual(mockUser);
-      expect(mockUsersService.update).toHaveBeenCalledWith(
-        'mockUserId',
-        updateUserDto,
-      );
+      const result = await controller.update(validObjectId, updateUserDto);
+
+      expect(service.update).toHaveBeenCalledWith(validObjectId, updateUserDto);
+      expect(result).toEqual(updatedUser);
     });
 
     it('should handle empty update', async () => {
       const updateUserDto: UpdateUserDto = {};
 
-      const result = await controller.update('mockUserId', updateUserDto);
+      mockUsersService.update.mockResolvedValue(mockUser);
 
+      const result = await controller.update(validObjectId, updateUserDto);
+
+      expect(service.update).toHaveBeenCalledWith(validObjectId, updateUserDto);
       expect(result).toEqual(mockUser);
-      expect(mockUsersService.update).toHaveBeenCalledWith(
-        'mockUserId',
-        updateUserDto,
-      );
-    });
-
-    it('should handle update with different id formats', async () => {
-      const updateUserDto: UpdateUserDto = { name: 'Test' };
-      const testIds = ['123', 'abc123', '507f1f77bcf86cd799439011'];
-
-      for (const id of testIds) {
-        await controller.update(id, updateUserDto);
-        expect(mockUsersService.update).toHaveBeenCalledWith(id, updateUserDto);
-      }
     });
   });
 
   describe('remove', () => {
     it('should remove a user', async () => {
-      const result = await controller.remove('mockUserId');
+      mockUsersService.remove.mockResolvedValue(mockUser);
 
+      const result = await controller.remove(validObjectId);
+
+      expect(service.remove).toHaveBeenCalledWith(validObjectId);
       expect(result).toEqual(mockUser);
-      expect(mockUsersService.remove).toHaveBeenCalledWith('mockUserId');
     });
 
-    it('should return null when removing non-existent user', async () => {
-      mockUsersService.remove.mockResolvedValue(null);
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      await expect(controller.remove(invalidObjectId)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+  });
 
-      const result = await controller.remove('nonExistentId');
+  describe('hardDelete', () => {
+    it('should hard delete a user', async () => {
+      mockUsersService.hardDelete.mockResolvedValue(undefined);
 
-      expect(result).toBeNull();
-      expect(mockUsersService.remove).toHaveBeenCalledWith('nonExistentId');
+      const result = await controller.hardDelete(validObjectId);
+
+      expect(service.hardDelete).toHaveBeenCalledWith(validObjectId);
+      expect(result).toBeUndefined();
     });
 
-    it('should handle different id formats for removal', async () => {
-      const testIds = ['123', 'abc123', '507f1f77bcf86cd799439011'];
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      await expect(controller.hardDelete(invalidObjectId)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+  });
 
-      for (const id of testIds) {
-        await controller.remove(id);
-        expect(mockUsersService.remove).toHaveBeenCalledWith(id);
-      }
+  describe('updateLastVisited', () => {
+    it('should update user last visited time', async () => {
+      const updatedUser = { ...mockUser, lastVisited: new Date() };
+      mockUsersService.updateLastVisited.mockResolvedValue(updatedUser);
+
+      const result = await controller.updateLastVisited(validObjectId);
+
+      expect(service.updateLastVisited).toHaveBeenCalledWith(validObjectId);
+      expect(result).toEqual(updatedUser);
     });
 
-    it('should remove active user', async () => {
-      const activeUser = { ...mockUser, isActive: true };
-      mockUsersService.remove.mockResolvedValue(activeUser);
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      await expect(
+        controller.updateLastVisited(invalidObjectId),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 
-      const result = await controller.remove('mockUserId');
+  describe('addSubscription', () => {
+    it('should add subscription to user', async () => {
+      const subscriptionDto: CreateSubscriptionDto = {
+        plan: SubscriptionPlan.PRO,
+        status: SubscriptionStatus.ACTIVE,
+        startDate: new Date(),
+      };
 
-      expect(result).toEqual(activeUser);
-      expect(mockUsersService.remove).toHaveBeenCalledWith('mockUserId');
+      const updatedUser = { ...mockUser, subscriptions: [subscriptionDto] };
+      mockUsersService.addSubscription.mockResolvedValue(updatedUser);
+
+      const result = await controller.addSubscription(
+        validObjectId,
+        subscriptionDto,
+      );
+
+      expect(service.addSubscription).toHaveBeenCalledWith(
+        validObjectId,
+        subscriptionDto,
+      );
+      expect(result).toEqual(updatedUser);
     });
 
-    it('should remove inactive user', async () => {
-      const inactiveUser = { ...mockUser, isActive: false };
-      mockUsersService.remove.mockResolvedValue(inactiveUser);
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      const subscriptionDto: CreateSubscriptionDto = {
+        plan: SubscriptionPlan.PRO,
+        status: SubscriptionStatus.ACTIVE,
+        startDate: new Date(),
+      };
 
-      const result = await controller.remove('mockUserId');
+      await expect(
+        controller.addSubscription(invalidObjectId, subscriptionDto),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 
-      expect(result).toEqual(inactiveUser);
-      expect(mockUsersService.remove).toHaveBeenCalledWith('mockUserId');
+  describe('updateSubscription', () => {
+    it('should update user subscription', async () => {
+      const subscriptionDto: UpdateSubscriptionDto = {
+        status: SubscriptionStatus.CANCELED,
+      };
+
+      const updatedUser = {
+        ...mockUser,
+        subscriptions: [{ ...subscriptionDto, plan: SubscriptionPlan.PRO }],
+      };
+      mockUsersService.updateSubscription.mockResolvedValue(updatedUser);
+
+      const result = await controller.updateSubscription(
+        validObjectId,
+        '0',
+        subscriptionDto,
+      );
+
+      expect(service.updateSubscription).toHaveBeenCalledWith(
+        validObjectId,
+        0,
+        subscriptionDto,
+      );
+      expect(result).toEqual(updatedUser);
     });
 
-    it('should handle empty id for removal', async () => {
-      await controller.remove('');
-      expect(mockUsersService.remove).toHaveBeenCalledWith('');
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      const subscriptionDto: UpdateSubscriptionDto = {
+        status: SubscriptionStatus.CANCELED,
+      };
+
+      await expect(
+        controller.updateSubscription(invalidObjectId, '0', subscriptionDto),
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('should handle special characters in id for removal', async () => {
-      const specialIds = ['test-id', 'test_id', 'test.id'];
+    it('should throw BadRequestException for invalid subscription index', async () => {
+      const subscriptionDto: UpdateSubscriptionDto = {
+        status: SubscriptionStatus.CANCELED,
+      };
 
-      for (const id of specialIds) {
-        await controller.remove(id);
-        expect(mockUsersService.remove).toHaveBeenCalledWith(id);
-      }
+      await expect(
+        controller.updateSubscription(
+          validObjectId,
+          'invalid',
+          subscriptionDto,
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('should remove multiple users sequentially', async () => {
-      const ids = ['id1', 'id2', 'id3'];
+    it('should throw BadRequestException for negative subscription index', async () => {
+      const subscriptionDto: UpdateSubscriptionDto = {
+        status: SubscriptionStatus.CANCELED,
+      };
 
-      for (const id of ids) {
-        await controller.remove(id);
-        expect(mockUsersService.remove).toHaveBeenCalledWith(id);
-      }
+      await expect(
+        controller.updateSubscription(validObjectId, '-1', subscriptionDto),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 
-      expect(mockUsersService.remove).toHaveBeenCalledTimes(ids.length);
+  describe('updateLastWatchedVideo', () => {
+    it('should update user last watched video', async () => {
+      const lastWatchedVideo: LastWatchedVideo = {
+        moduleId: 'module123',
+        videoId: 'video123',
+        timestamp: new Date(),
+      };
+
+      const updatedUser = {
+        ...mockUser,
+        lastWatchedVideos: [lastWatchedVideo],
+      };
+      mockUsersService.updateLastWatchedVideo.mockResolvedValue(updatedUser);
+
+      const result = await controller.updateLastWatchedVideo(
+        validObjectId,
+        lastWatchedVideo,
+      );
+
+      expect(service.updateLastWatchedVideo).toHaveBeenCalledWith(
+        validObjectId,
+        lastWatchedVideo,
+      );
+      expect(result).toEqual(updatedUser);
+    });
+
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      const lastWatchedVideo: LastWatchedVideo = {
+        moduleId: 'module123',
+        videoId: 'video123',
+        timestamp: new Date(),
+      };
+
+      await expect(
+        controller.updateLastWatchedVideo(invalidObjectId, lastWatchedVideo),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('updateUserRole', () => {
+    it('should update user role', async () => {
+      const newRole = UserRole.ADMIN;
+      const updatedUser = { ...mockUser, role: newRole };
+      mockUsersService.updateUserRole.mockResolvedValue(updatedUser);
+
+      const result = await controller.updateUserRole(validObjectId, newRole);
+
+      expect(service.updateUserRole).toHaveBeenCalledWith(
+        validObjectId,
+        newRole,
+      );
+      expect(result).toEqual(updatedUser);
+    });
+
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      const newRole = UserRole.ADMIN;
+
+      await expect(
+        controller.updateUserRole(invalidObjectId, newRole),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException for invalid role', async () => {
+      await expect(
+        controller.updateUserRole(validObjectId, 'INVALID_ROLE' as UserRole),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('deactivateUser', () => {
+    it('should deactivate user', async () => {
+      const deactivatedUser = { ...mockUser, isActive: false };
+      mockUsersService.deactivateUser.mockResolvedValue(deactivatedUser);
+
+      const result = await controller.deactivateUser(validObjectId);
+
+      expect(service.deactivateUser).toHaveBeenCalledWith(validObjectId);
+      expect(result).toEqual(deactivatedUser);
+    });
+
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      await expect(controller.deactivateUser(invalidObjectId)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('activateUser', () => {
+    it('should activate user', async () => {
+      const activatedUser = { ...mockUser, isActive: true };
+      mockUsersService.activateUser.mockResolvedValue(activatedUser);
+
+      const result = await controller.activateUser(validObjectId);
+
+      expect(service.activateUser).toHaveBeenCalledWith(validObjectId);
+      expect(result).toEqual(activatedUser);
+    });
+
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      await expect(controller.activateUser(invalidObjectId)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('changePassword', () => {
+    it('should change user password', async () => {
+      const newPassword = 'newPassword123';
+      const updatedUser = { ...mockUser };
+      mockUsersService.changePassword.mockResolvedValue(updatedUser);
+
+      const result = await controller.changePassword(
+        validObjectId,
+        newPassword,
+      );
+
+      expect(service.changePassword).toHaveBeenCalledWith(
+        validObjectId,
+        newPassword,
+      );
+      expect(result).toEqual(updatedUser);
+    });
+
+    it('should throw BadRequestException for invalid ObjectId', async () => {
+      const newPassword = 'newPassword123';
+
+      await expect(
+        controller.changePassword(invalidObjectId, newPassword),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException for password too short', async () => {
+      const shortPassword = '123';
+
+      await expect(
+        controller.changePassword(validObjectId, shortPassword),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException for empty password', async () => {
+      await expect(
+        controller.changePassword(validObjectId, ''),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException for null password', async () => {
+      await expect(
+        controller.changePassword(validObjectId, null),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });
