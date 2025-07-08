@@ -30,54 +30,22 @@ export class YoutubeController {
   ) {}
 
   @Get('/connect')
-  @ApiOperation({
-    summary: 'Initiate YouTube OAuth flow',
-    description:
-      'Redirects to Google OAuth consent screen for YouTube API access',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns OAuth URL for Google consent screen',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - invalid user or other error',
-  })
+  @ApiOperation({ summary: 'Initiate YouTube OAuth flow' })
+  @ApiResponse({ status: 200, description: 'Returns OAuth URL' })
   async initiateOAuth(@User('id') userId: string): Promise<{ url: string }> {
     const url = await this.youtubeService.generateOAuthUrl(userId);
     return { url };
   }
 
-  @Get('/dashboard-stats')
-  @ApiOperation({
-    summary: 'Get dashboard statistics',
-    description:
-      'Retrieves channel statistics for the last 48 hours for a dashboard',
-  })
-  @ApiQuery({
-    name: 'dashboardId',
-    required: true,
-    type: String,
-    description: 'Dashboard ID to get stats for',
-  })
+  @Get('/channel/stats')
+  @ApiOperation({ summary: 'Get channel statistics' })
+  @ApiQuery({ name: 'dashboardId', required: true, type: String })
   @ApiResponse({
     status: 200,
-    description: 'Returns dashboard statistics',
+    description: 'Returns channel statistics',
     type: Array,
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - Dashboard ID is required',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Dashboard not found',
-  })
-  @ApiResponse({
-    status: 500,
-    description: 'Internal server error',
-  })
-  async getDashboardStats(
+  async getChannelStats(
     @Query() dashboardStatsDto: DashboardStatsDto,
   ): Promise<DashboardStatsResponse> {
     try {
@@ -89,7 +57,7 @@ export class YoutubeController {
         throw new HttpException('Dashboard not found', HttpStatus.NOT_FOUND);
       }
 
-      console.error('Error fetching dashboard stats:', error);
+      console.error('Error fetching channel stats:', error);
       throw new HttpException(
         'Internal server error',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -98,38 +66,12 @@ export class YoutubeController {
   }
 
   @Get('/reconnect')
-  @ApiOperation({
-    summary: 'Reconnect YouTube channel',
-    description:
-      'Initiates OAuth flow to reconnect an existing YouTube channel',
-  })
-  @ApiQuery({
-    name: 'channelId',
-    required: true,
-    type: String,
-    description: 'Channel ID to reconnect',
-  })
-  @ApiQuery({
-    name: 'dashboardId',
-    required: true,
-    type: String,
-    description: 'Dashboard ID',
-  })
+  @ApiOperation({ summary: 'Reconnect YouTube channel' })
+  @ApiQuery({ name: 'channelId', required: true, type: String })
+  @ApiQuery({ name: 'dashboardId', required: true, type: String })
   @ApiResponse({
     status: 302,
-    description: 'Redirects to Google OAuth consent screen',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - Channel ID and Dashboard ID are required',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'YouTube account not found',
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Unauthorized access to YouTube account',
+    description: 'Redirects to OAuth consent screen',
   })
   async reconnectChannel(
     @Res() res: Response,
@@ -154,17 +96,10 @@ export class YoutubeController {
   }
 
   @Post('/disconnect')
-  @ApiOperation({
-    summary: 'Disconnect YouTube channel',
-    description: 'Disconnects a YouTube channel from the dashboard',
-  })
+  @ApiOperation({ summary: 'Disconnect YouTube channel' })
   @ApiResponse({
     status: 200,
     description: 'Channel disconnected successfully',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Dashboard, YouTube account, or channel connection not found',
   })
   async disconnectChannel(
     @User('id') userId: string,
@@ -181,19 +116,8 @@ export class YoutubeController {
 
   @Public()
   @Get('/callback')
-  @ApiOperation({
-    summary: 'Handle YouTube OAuth callback',
-    description:
-      'Processes the OAuth callback from Google and creates/updates YouTube account',
-  })
-  @ApiResponse({
-    status: 302,
-    description: 'Redirects to analytics page with success or error',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Bad request - missing required parameters',
-  })
+  @ApiOperation({ summary: 'Handle YouTube OAuth callback' })
+  @ApiResponse({ status: 302, description: 'Redirects to analytics page' })
   async handleCallback(
     @Res() res: Response,
     @Query() youtubeCallbackDto: YoutubeCallbackDto,

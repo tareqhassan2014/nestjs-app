@@ -2,11 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { google } from 'googleapis';
-import { Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import { CreateYoutubeAccountDto } from './dto/create-youtube-account.dto';
 import { DashboardStatsResponse } from './dto/dashboard-stats.dto';
 import { YoutubeCallbackDto } from './dto/youtube-callback.dto';
-import { YoutubeChannelStat } from './schemas/channel-stats.schema';
+import {
+  YOUTUBE_CHANNEL_STATS_COLLECTION,
+  YoutubeChannelStat,
+} from './schemas/channel-stats.schema';
 import { DashboardChannel } from './schemas/dashboard-channel.schema';
 import { Dashboard } from './schemas/dashboard.schema';
 import { Video } from './schemas/video.schema';
@@ -137,20 +140,53 @@ export class YoutubeService {
     return returnUrl;
   }
 
-  async getDashboardStats(
-    dashboardId: string,
-  ): Promise<DashboardStatsResponse> {
+  async getDashboardStats(userId: string): Promise<DashboardStatsResponse> {
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
 
     // Find dashboard channels with populated YouTube accounts
-    const dashboardChannels = await this.dashboardChannelModel
-      .find({ dashboardId })
-      .populate({
-        path: 'youtubeAccountId',
-        model: YoutubeAccount.name,
-        select: 'channelId channelTitle _id',
-      })
-      .exec();
+    const dashboardChannels = await this.youtubeAccountModel.aggregate([
+      {
+        $match: { userId: new mongoose.Types.ObjectId(userId) },
+      },
+      {
+        $lookup: {
+          from: YOUTUBE_CHANNEL_STATS_COLLECTION,
+          localField: '_id',
+          foreignField: 'youtubeAccountId',
+          as: 'channelStats',
+          pipeline: [
+            {
+              $match: {
+                timestamp: { $gte: fortyEightHoursAgo },
+              },
+            },
+            {
+              $sort: { timestamp: 1 },
+            },
+            {
+              $project: {
+                _id: 0,
+                longViews: 1,
+                timestamp: 1,
+                totalViews: 1,
+                shortViews: 1,
+                hourlyViewChange: 1,
+                hourlyViewChangeLong: 1,
+                hourlyViewChangeShort: 1,
+              },
+            },
+          ],
+        },
+      },
+      {
+        $project: {
+          channelId: 1,
+          channelTitle: 1,
+          accessToken: 1,
+          channelStats: 1,
+        },
+      },
+    ]);
 
     if (!dashboardChannels || dashboardChannels.length === 0) {
       return [];
