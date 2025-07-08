@@ -3,8 +3,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import crypto from 'crypto';
 import { google } from 'googleapis';
 import { Model } from 'mongoose';
-import { YOUTUBE_API_QUOTA_COSTS } from './constants/quota-costs.constants';
-import { YouTubeApiKey } from './schemas/youtube-api-key.schema';
+import { YOUTUBE_API_QUOTA_COSTS } from '../constants/quota-costs.constants';
+import { YouTubeApiKey } from '../schemas/youtube-api-key.schema';
 
 @Injectable()
 export class ApiKeyManagerService {

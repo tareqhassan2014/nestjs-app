@@ -13,6 +13,10 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
+import {
+  DashboardStatsDto,
+  DashboardStatsResponse,
+} from './dto/dashboard-stats.dto';
 import { DisconnectChannelDto } from './dto/disconnect-channel.dto';
 import { YoutubeCallbackDto } from './dto/youtube-callback.dto';
 import { YoutubeService } from './youtube.service';
@@ -42,6 +46,55 @@ export class YoutubeController {
   async initiateOAuth(@User('id') userId: string): Promise<{ url: string }> {
     const url = await this.youtubeService.generateOAuthUrl(userId);
     return { url };
+  }
+
+  @Get('/dashboard-stats')
+  @ApiOperation({
+    summary: 'Get dashboard statistics',
+    description:
+      'Retrieves channel statistics for the last 48 hours for a dashboard',
+  })
+  @ApiQuery({
+    name: 'dashboardId',
+    required: true,
+    type: String,
+    description: 'Dashboard ID to get stats for',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns dashboard statistics',
+    type: Array,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Dashboard ID is required',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Dashboard not found',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async getDashboardStats(
+    @Query() dashboardStatsDto: DashboardStatsDto,
+  ): Promise<DashboardStatsResponse> {
+    try {
+      return await this.youtubeService.getDashboardStats(
+        dashboardStatsDto.dashboardId,
+      );
+    } catch (error) {
+      if (error.message === 'Dashboard not found') {
+        throw new HttpException('Dashboard not found', HttpStatus.NOT_FOUND);
+      }
+
+      console.error('Error fetching dashboard stats:', error);
+      throw new HttpException(
+        'Internal server error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('/reconnect')

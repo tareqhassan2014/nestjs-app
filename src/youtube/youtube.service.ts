@@ -4,10 +4,15 @@ import { InjectModel } from '@nestjs/mongoose';
 import { google } from 'googleapis';
 import { Model } from 'mongoose';
 import { CreateYoutubeAccountDto } from './dto/create-youtube-account.dto';
+import { DashboardStatsResponse } from './dto/dashboard-stats.dto';
 import { YoutubeCallbackDto } from './dto/youtube-callback.dto';
-import { GoogleAuthService } from './google-auth.service';
+import { YoutubeChannelStat } from './schemas/channel-stats.schema';
+import { DashboardChannel } from './schemas/dashboard-channel.schema';
+import { Dashboard } from './schemas/dashboard.schema';
 import { Video } from './schemas/video.schema';
 import { YoutubeAccount } from './schemas/youtube-account.schema';
+import { ApiKeyManagerService } from './services/api-key-manager.service';
+import { GoogleAuthService } from './services/google-auth.service';
 
 @Injectable()
 export class YoutubeService {
@@ -15,8 +20,15 @@ export class YoutubeService {
     @InjectModel(Video.name) private videoModel: Model<Video>,
     @InjectModel(YoutubeAccount.name)
     private youtubeAccountModel: Model<YoutubeAccount>,
+    @InjectModel(Dashboard.name)
+    private dashboardModel: Model<Dashboard>,
+    @InjectModel(DashboardChannel.name)
+    private dashboardChannelModel: Model<DashboardChannel>,
+    @InjectModel(YoutubeChannelStat.name)
+    private channelStatsModel: Model<YoutubeChannelStat>,
     private readonly configService: ConfigService,
     private readonly googleAuthService: GoogleAuthService,
+    private readonly apiKeyManagerService: ApiKeyManagerService,
   ) {}
 
   async generateOAuthUrl(userId: string): Promise<string> {
@@ -123,6 +135,118 @@ export class YoutubeService {
     );
 
     return returnUrl;
+  }
+
+  async getDashboardStats(
+    dashboardId: string,
+  ): Promise<DashboardStatsResponse> {
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+    // Find dashboard channels with populated YouTube accounts
+    const dashboardChannels = await this.dashboardChannelModel
+      .find({ dashboardId })
+      .populate({
+        path: 'youtubeAccountId',
+        model: YoutubeAccount.name,
+        select: 'channelId channelTitle _id',
+      })
+      .exec();
+
+    if (!dashboardChannels || dashboardChannels.length === 0) {
+      return [];
+    }
+
+    // Generate array of expected timestamps for the last 48 hours
+    const expectedTimestamps = Array.from({ length: 48 }, (_, i) => {
+      const d = new Date();
+      d.setHours(d.getHours() - (47 - i));
+      d.setMinutes(0, 0, 0);
+      return d.toISOString();
+    });
+
+    // Process each channel's data and fetch subscriber counts
+    const channelStats = await Promise.all(
+      dashboardChannels.map(async (dashboardChannel) => {
+        const youtubeAccount = dashboardChannel.youtubeAccountId as any; // Type assertion for populated field
+
+        // Fetch channel stats from database using youtubeAccountId
+        const channelStatsData = await this.channelStatsModel
+          .find({
+            youtubeAccountId: youtubeAccount._id,
+            timestamp: { $gte: fortyEightHoursAgo },
+          })
+          .sort({ timestamp: 1 })
+          .exec();
+
+        // Fetch subscriber count from YouTube API
+        let totalSubscribers = 0;
+        try {
+          const channelResponse =
+            await this.apiKeyManagerService.makeYoutubeApiCall(
+              (youtube) =>
+                youtube.channels.list({
+                  part: ['statistics'],
+                  id: [youtubeAccount.channelId],
+                }),
+              'channels.list',
+            );
+
+          totalSubscribers = parseInt(
+            channelResponse.data.items?.[0]?.statistics?.subscriberCount || '0',
+          );
+        } catch (error) {
+          console.error('Error fetching subscriber count:', error);
+          // Continue with 0 subscribers if API call fails
+        }
+
+        // Create a map of existing stats by hour for easy lookup
+        const statsMap = new Map(
+          channelStatsData.map((stat) => [
+            new Date(stat.timestamp).setMinutes(0, 0, 0),
+            {
+              hourlyViewChange: stat.hourlyViewChange,
+              hourlyViewChangeShort: stat.hourlyViewChangeShort,
+              hourlyViewChangeLong: stat.hourlyViewChangeLong,
+              totalViews: stat.totalViews,
+              shortViews: stat.shortViews,
+              longViews: stat.longViews,
+            },
+          ]),
+        );
+
+        // Fill in missing hours with 0
+        const hourlyStats = expectedTimestamps.map((timestamp) => {
+          const hourKey = new Date(timestamp).setMinutes(0, 0, 0);
+          const statData = statsMap.get(hourKey) || {
+            hourlyViewChange: 0,
+            hourlyViewChangeShort: 0,
+            hourlyViewChangeLong: 0,
+            totalViews: 0,
+            shortViews: 0,
+            longViews: 0,
+          };
+
+          return {
+            timestamp,
+            hourlyViewChange: statData.hourlyViewChange,
+            hourlyViewChangeShort: statData.hourlyViewChangeShort,
+            hourlyViewChangeLong: statData.hourlyViewChangeLong,
+            totalViews: statData.totalViews,
+            shortViews: statData.shortViews,
+            longViews: statData.longViews,
+          };
+        });
+
+        return {
+          channelId: youtubeAccount.channelId,
+          channelTitle: youtubeAccount.channelTitle,
+          totalSubscribers,
+          stats: hourlyStats,
+        };
+      }),
+    );
+
+    return channelStats;
   }
 
   async getReconnectUrl(
