@@ -71,3 +71,153 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](LICENSE).
+
+# NestJS MongoDB Application
+
+A NestJS application with MongoDB integration using Mongoose following NestJS best practices.
+
+## Features
+
+- ✅ NestJS Framework
+- ✅ MongoDB integration with Mongoose
+- ✅ Environment configuration
+- ✅ User CRUD operations
+- ✅ TypeScript support
+- ✅ Testing setup (Jest)
+- ✅ Linting and formatting (ESLint + Prettier)
+
+## Prerequisites
+
+- Node.js (v16 or higher)
+- MongoDB (local installation or MongoDB Atlas)
+- pnpm package manager
+
+## Installation
+
+1. Install dependencies:
+
+```bash
+pnpm install
+```
+
+2. Set up environment variables:
+
+```bash
+# Copy the .env file and update the MongoDB connection string
+cp .env.example .env
+```
+
+3. Update the MongoDB connection string in `.env`:
+
+```env
+MONGODB_URI=mongodb://localhost:27017/nestjs-app
+```
+
+For MongoDB Atlas:
+
+```env
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/nestjs-app
+```
+
+## Running the Application
+
+```bash
+# Development
+pnpm run start:dev
+
+# Production
+pnpm run start:prod
+
+# Build
+pnpm run build
+```
+
+## API Endpoints
+
+### Users API
+
+- `GET /users` - Get all users
+- `GET /users/:id` - Get user by ID
+- `POST /users` - Create a new user
+- `PATCH /users/:id` - Update user
+- `DELETE /users/:id` - Delete user
+
+#### Example Usage
+
+```bash
+# Create a user
+curl -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John Doe","email":"john@example.com","age":30}'
+
+# Get all users
+curl http://localhost:3000/users
+
+# Get user by ID
+curl http://localhost:3000/users/USER_ID
+
+# Update user
+curl -X PATCH http://localhost:3000/users/USER_ID \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Jane Doe"}'
+
+# Delete user
+curl -X DELETE http://localhost:3000/users/USER_ID
+```
+
+## Testing
+
+```bash
+# Unit tests
+pnpm run test
+
+# End-to-end tests
+pnpm run test:e2e
+
+# Test coverage
+pnpm run test:cov
+```
+
+## Database Schema
+
+### User Schema
+
+```typescript
+{
+  name: string; // Required
+  email: string; // Required, unique
+  age: number; // Optional
+  isActive: boolean; // Default: true
+  createdAt: Date; // Auto-generated
+  updatedAt: Date; // Auto-generated
+}
+```
+
+## Project Structure
+
+```
+src/
+├── app.controller.ts
+├── app.module.ts
+├── app.service.ts
+├── main.ts
+└── users/
+    ├── dto/
+    │   ├── create-user.dto.ts
+    │   └── update-user.dto.ts
+    ├── schemas/
+    │   └── user.schema.ts
+    ├── users.controller.ts
+    ├── users.module.ts
+    └── users.service.ts
+```
+
+## Development Tools
+
+- **Linting**: `pnpm run lint`
+- **Formatting**: `pnpm run format`
+- **Type checking**: Built-in with TypeScript
+
+## License
+
+This project is licensed under the UNLICENSED License.
