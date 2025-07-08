@@ -9,16 +9,17 @@ export async function bootstrap() {
   try {
     const app = await NestFactory.create(AppModule);
 
-    // Get the TypedConfigService as requested by the user
     const configService = app.get(TypedConfigService);
     const port = configService.app.port;
+    const environment = configService.app.environment;
 
-    await app.listen(port);
-
-    logger.log(`Application is running on: http://localhost:${port}`);
-    logger.log('Environment variables validated successfully');
-    logger.log(`Environment: ${configService.app.environment}`);
-    logger.log(`Service Name: ${configService.app.serviceName}`);
+    await app.listen(port, async () => {
+      const serverUrl = await app.getUrl();
+      logger.log(`=================================`);
+      logger.log(`======= ENV: ${environment} =======`);
+      logger.log(`🚀 Server is running on: ${serverUrl}`);
+      logger.log(`=================================`);
+    });
   } catch (error) {
     if (
       error.message &&
