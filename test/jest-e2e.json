@@ -7,5 +7,8 @@
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "testTimeout": 60000,
-  "setupFilesAfterEnv": ["<rootDir>/jest.setup.ts"]
+  "setupFilesAfterEnv": ["<rootDir>/jest.setup.ts"],
+  "forceExit": true,
+  "detectOpenHandles": true,
+  "openHandlesTimeout": 5000
 }

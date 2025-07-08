@@ -37,6 +37,11 @@ describe('Users (e2e)', () => {
     if (mongoServer) {
       await mongoServer.stop();
     }
+
+    // Force cleanup any remaining connections
+    await new Promise<void>((resolve) => {
+      setTimeout(() => resolve(), 100);
+    });
   }, 60000);
 
   describe('/users (POST)', () => {
