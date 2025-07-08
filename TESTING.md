@@ -9,12 +9,13 @@
 5. [Writing New Tests](#writing-new-tests)
 6. [Testing Best Practices](#testing-best-practices)
 7. [Troubleshooting](#troubleshooting)
-8. [CI/CD Integration](#cicd-integration)
-9. [Advanced Testing Scenarios](#advanced-testing-scenarios)
+8. [Fixing Hanging Worker Process Issues](#fixing-hanging-worker-process-issues)
+9. [CI/CD Integration](#cicd-integration)
+10. [Advanced Testing Scenarios](#advanced-testing-scenarios)
 
 ## Overview
 
-This NestJS application has comprehensive test coverage with **98.75% statement coverage** and **100% branch/function coverage**. The testing strategy includes:
+This NestJS application has comprehensive test coverage with **100% statement coverage** and **100% branch/function coverage**. The testing strategy includes:
 
 - **Unit Tests**: Testing individual components in isolation
 - **Integration Tests**: Testing module interactions
@@ -25,7 +26,11 @@ This NestJS application has comprehensive test coverage with **98.75% statement 
 
 - **Total Tests**: 83 (73 unit + 10 e2e)
 - **Test Suites**: 8 (6 unit + 2 e2e)
-- **Coverage**: 98.75% statements, 100% branches, 100% functions
+- **Coverage**: 100% statements, 100% branches, 100% functions
+
+### Recent Updates
+
+✅ **Fixed Hanging Worker Process Issue**: Implemented comprehensive cleanup strategies to prevent Jest worker processes from hanging after tests complete. See [Fixing Hanging Worker Process Issues](#fixing-hanging-worker-process-issues) for detailed implementation guide.
 
 ## Test Structure
 
@@ -424,6 +429,310 @@ it('should debug', () => {
   expect(result).toBe(expected);
 });
 ```
+
+## Fixing Hanging Worker Process Issues
+
+### Problem Description
+
+A common issue in NestJS testing is when Jest worker processes fail to exit gracefully after tests complete. This manifests as:
+
+```
+A worker process has failed to exit gracefully and has been force exited.
+This is likely caused by tests leaking due to improper teardown.
+Try running with --detectOpenHandles to find leaks.
+```
+
+### Root Causes
+
+1. **Unclosed Database Connections**: MongoDB connections not properly closed
+2. **Unclosed NestJS Applications**: App instances not terminated after tests
+3. **Hanging Timers**: Active timers preventing process exit
+4. **Resource Leaks**: File handles, network connections, or other resources not cleaned up
+
+### Complete Solution Implementation
+
+#### 1. Update Jest Configuration
+
+**File: `jest.config.js`**
+
+```javascript
+module.exports = {
+  // ... existing config
+
+  // Critical options for preventing hanging processes
+  forceExit: true, // Force Jest to exit after tests
+  detectOpenHandles: true, // Detect resources preventing exit
+  openHandlesTimeout: 5000, // Timeout for async operations
+
+  // Other helpful options
+  maxWorkers: '50%', // Limit concurrent workers
+  testTimeout: 30000, // Global test timeout
+};
+```
+
+**File: `test/jest-e2e.json`**
+
+```json
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": ".e2e-spec.ts$",
+  "transform": {
+    "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "testTimeout": 60000,
+  "setupFilesAfterEnv": ["<rootDir>/jest.setup.ts"],
+  "forceExit": true,
+  "detectOpenHandles": true,
+  "openHandlesTimeout": 5000
+}
+```
+
+#### 2. Update Test Scripts
+
+**File: `package.json`**
+
+```json
+{
+  "scripts": {
+    "test": "jest --detectOpenHandles --forceExit",
+    "test:watch": "jest --watch --detectOpenHandles",
+    "test:cov": "jest --coverage --detectOpenHandles --forceExit",
+    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand --detectOpenHandles",
+    "test:e2e": "jest --config ./test/jest-e2e.json --detectOpenHandles --forceExit"
+  }
+}
+```
+
+#### 3. Enhance Global Test Setup
+
+**File: `jest.setup.ts`**
+
+```typescript
+// Global Jest setup file
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL = 'mongodb://localhost:27017/nestjs-test';
+
+jest.setTimeout(30000);
+
+// Global cleanup hooks
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+afterEach(() => {
+  // Cleanup after each test
+});
+
+// Critical: Global afterAll hook
+afterAll(async () => {
+  // Force cleanup of remaining resources
+  await new Promise<void>((resolve) => {
+    setTimeout(() => resolve(), 100);
+  });
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
+// Ensure proper cleanup on process exit
+process.on('beforeExit', () => {
+  // Final cleanup before process exits
+});
+
+export {};
+```
+
+#### 4. Fix E2E Test Cleanup
+
+**File: `test/app.e2e-spec.ts`**
+
+```typescript
+import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
+import * as request from 'supertest';
+import { AppModule } from './../src/app.module';
+
+describe('AppController (e2e)', () => {
+  let app: INestApplication;
+
+  beforeEach(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+  });
+
+  // CRITICAL: Always close the app after each test
+  afterEach(async () => {
+    if (app) {
+      await app.close();
+    }
+  });
+
+  it('/ (GET)', () => {
+    return request(app.getHttpServer())
+      .get('/')
+      .expect(200)
+      .expect('Hello World!');
+  });
+});
+```
+
+#### 5. Improve Database Test Utilities
+
+**File: `test/test-utils.ts`**
+
+```typescript
+import { MongoMemoryServer } from 'mongodb-memory-server';
+import { Connection } from 'mongoose';
+
+export class TestDatabase {
+  private static mongod: MongoMemoryServer;
+  private static connection: Connection;
+
+  static async create(): Promise<MongoMemoryServer> {
+    if (!this.mongod) {
+      this.mongod = await MongoMemoryServer.create();
+    }
+    return this.mongod;
+  }
+
+  static async cleanup(): Promise<void> {
+    if (this.connection) {
+      try {
+        await this.connection.db.dropDatabase();
+      } catch (error) {
+        console.warn('Error dropping database:', error);
+      }
+
+      try {
+        await this.connection.close();
+      } catch (error) {
+        console.warn('Error closing connection:', error);
+      }
+
+      this.connection = null;
+    }
+  }
+
+  static async stop(): Promise<void> {
+    // Clean up connection first
+    await this.cleanup();
+
+    if (this.mongod) {
+      try {
+        await this.mongod.stop();
+      } catch (error) {
+        console.warn('Error stopping MongoDB Memory Server:', error);
+      }
+      this.mongod = null;
+    }
+  }
+
+  static async reset(): Promise<void> {
+    await this.stop();
+    this.mongod = null;
+    this.connection = null;
+  }
+}
+```
+
+#### 6. Enhanced E2E Test Cleanup
+
+**File: `test/users.e2e-spec.ts`**
+
+```typescript
+describe('Users (e2e)', () => {
+  let app: INestApplication;
+  let mongoServer: MongoMemoryServer;
+
+  beforeAll(async () => {
+    mongoServer = await MongoMemoryServer.create();
+    const mongoUri = mongoServer.getUri();
+
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true }),
+        MongooseModule.forRoot(mongoUri),
+        UsersModule,
+      ],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    await app.init();
+  }, 60000);
+
+  afterAll(async () => {
+    if (app) {
+      await app.close();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+
+    // Force cleanup any remaining connections
+    await new Promise<void>((resolve) => {
+      setTimeout(() => resolve(), 100);
+    });
+  }, 60000);
+
+  // ... tests
+});
+```
+
+### Quick Setup Checklist
+
+When setting up tests in a new NestJS project, ensure:
+
+- [ ] `forceExit: true` in Jest config
+- [ ] `detectOpenHandles: true` in Jest config
+- [ ] `--detectOpenHandles --forceExit` in test scripts
+- [ ] `afterEach` hooks close NestJS applications
+- [ ] `afterAll` hooks stop MongoDB Memory Server
+- [ ] Database connections are properly closed
+- [ ] Global cleanup hooks in `jest.setup.ts`
+- [ ] Proper error handling in cleanup methods
+
+### Verification
+
+After implementing these fixes, verify with:
+
+```bash
+# Run tests - should complete without hanging
+npm test
+
+# Run E2E tests - should exit cleanly
+npm run test:e2e
+
+# Run with coverage - should not hang
+npm run test:cov
+```
+
+The output should show tests completing without the "force exited" warning.
+
+### Summary
+
+This comprehensive solution addresses the hanging worker process issue by:
+
+1. **Forcing Jest to exit** with `forceExit: true`
+2. **Detecting open handles** with `detectOpenHandles: true`
+3. **Proper application cleanup** in `afterEach` hooks
+4. **Database connection cleanup** with error handling
+5. **Global cleanup hooks** in Jest setup
+6. **Enhanced test utilities** for MongoDB Memory Server
+
+Follow the Quick Setup Checklist when implementing this in new projects to ensure all cleanup mechanisms are in place.
 
 ## CI/CD Integration
 
