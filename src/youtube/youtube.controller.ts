@@ -22,7 +22,7 @@ import { YoutubeCallbackDto } from './dto/youtube-callback.dto';
 import { YoutubeService } from './youtube.service';
 
 @ApiTags('youtube')
-@Controller('youtube')
+@Controller('/youtube/channel')
 export class YoutubeController {
   constructor(
     private readonly youtubeService: YoutubeService,
@@ -37,7 +37,7 @@ export class YoutubeController {
     return { url };
   }
 
-  @Get('/channel/stats')
+  @Get('/stats')
   @ApiOperation({ summary: 'Get channel statistics' })
   @ApiQuery({ name: 'dashboardId', required: true, type: String })
   @ApiResponse({
