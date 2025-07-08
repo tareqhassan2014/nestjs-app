@@ -568,16 +568,34 @@ describe('UsersService', () => {
         }),
       };
 
+      const mockUpdatedUser = {
+        ...mockUser,
+        subscriptions: [...mockUser.subscriptions, subscriptionDto],
+      };
+
       (MockUserConstructor as any).findById = jest
         .fn()
         .mockResolvedValue(mockUserWithSubscription);
+      (MockUserConstructor as any).findByIdAndUpdate = jest
+        .fn()
+        .mockReturnValue({
+          select: jest.fn().mockReturnValue({
+            exec: jest.fn().mockResolvedValue(mockUpdatedUser),
+          }),
+        });
 
       const result = await service.addSubscription(userId, subscriptionDto);
 
       expect((MockUserConstructor as any).findById).toHaveBeenCalledWith(
         userId,
       );
-      expect(mockUserWithSubscription.save).toHaveBeenCalled();
+      expect(
+        (MockUserConstructor as any).findByIdAndUpdate,
+      ).toHaveBeenCalledWith(
+        userId,
+        { $push: { subscriptions: expect.objectContaining(subscriptionDto) } },
+        { new: true },
+      );
       expect(result).toBeDefined();
     });
 
@@ -590,6 +608,30 @@ describe('UsersService', () => {
       };
 
       (MockUserConstructor as any).findById = jest.fn().mockResolvedValue(null);
+
+      await expect(
+        service.addSubscription(userId, subscriptionDto),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw NotFoundException if user not found during update', async () => {
+      const userId = '507f1f77bcf86cd799439011';
+      const subscriptionDto: CreateSubscriptionDto = {
+        plan: SubscriptionPlan.PRO,
+        status: SubscriptionStatus.ACTIVE,
+        startDate: new Date(),
+      };
+
+      (MockUserConstructor as any).findById = jest
+        .fn()
+        .mockResolvedValue(mockUser);
+      (MockUserConstructor as any).findByIdAndUpdate = jest
+        .fn()
+        .mockReturnValue({
+          select: jest.fn().mockReturnValue({
+            exec: jest.fn().mockResolvedValue(null),
+          }),
+        });
 
       await expect(
         service.addSubscription(userId, subscriptionDto),

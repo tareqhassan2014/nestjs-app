@@ -5,10 +5,8 @@ import {
   SubscriptionStatus,
 } from '../enums/subscription.enum';
 
-export type SubscriptionDocument = Subscription & Document;
-
 @Schema({ timestamps: true })
-export class Subscription {
+export class Subscription extends Document {
   @Prop({ type: String, index: true, sparse: true })
   stripeCustomerId?: string;
 

@@ -9,10 +9,8 @@ import {
   VideoThumbnail,
 } from '../interfaces/video.interface';
 
-export type VideoDocument = Video & Document;
-
 @Schema({ timestamps: true, collection: 'videos' })
-export class Video {
+export class Video extends Document {
   @Prop({
     type: String,
     required: [true, 'Video title is required'],

@@ -16,11 +16,11 @@ import {
 } from './enums/subscription.enum';
 import { UserRole } from './enums/user-role.enum';
 import { LastWatchedVideo } from './interfaces/user.interface';
-import { User, UserDocument } from './schemas/user.schema';
+import { User } from './schemas/user.schema';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(@InjectModel(User.name) private userModel: Model<User>) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     try {
@@ -164,19 +164,28 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Add new subscription
-    user.subscriptions = user.subscriptions || [];
-
-    // Ensure startDate is set if not provided
-    const subscription = {
+    // Create subscription object
+    const subscriptionData = {
       ...subscriptionDto,
       startDate: subscriptionDto.startDate || new Date(),
     };
 
-    user.subscriptions.push(subscription);
+    // Use findByIdAndUpdate with $push to add the subscription
+    // This avoids TypeScript issues with embedded document arrays
+    const updatedUser = await this.userModel
+      .findByIdAndUpdate(
+        id,
+        { $push: { subscriptions: subscriptionData } },
+        { new: true },
+      )
+      .select('-password')
+      .exec();
 
-    const updatedUser = await user.save();
-    return updatedUser.toObject();
+    if (!updatedUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    return updatedUser;
   }
 
   async updateSubscription(

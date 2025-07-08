@@ -11,7 +11,7 @@ import { Subscription, SubscriptionSchema } from './subscription.schema';
 export type UserDocument = User & Document;
 
 @Schema({ timestamps: true, collection: 'users' })
-export class User {
+export class User extends Document {
   @Prop({
     type: String,
     required: [true, 'Email is required'],

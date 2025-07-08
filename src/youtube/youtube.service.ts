@@ -9,13 +9,11 @@ import { CreateVideoDto } from './dto/create-video.dto';
 import { UpdateVideoDto } from './dto/update-video.dto';
 import { VideoCategory } from './enums/video-category.enum';
 import { VideoStatus } from './enums/video-status.enum';
-import { Video, VideoDocument } from './schemas/video.schema';
+import { Video } from './schemas/video.schema';
 
 @Injectable()
 export class YoutubeService {
-  constructor(
-    @InjectModel(Video.name) private videoModel: Model<VideoDocument>,
-  ) {}
+  constructor(@InjectModel(Video.name) private videoModel: Model<Video>) {}
 
   async create(createVideoDto: CreateVideoDto): Promise<Video> {
     try {
