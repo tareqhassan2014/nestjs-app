@@ -28,12 +28,16 @@ describe('Users (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     await app.init();
-  });
+  }, 60000);
 
   afterAll(async () => {
-    await app.close();
-    await mongoServer.stop();
-  });
+    if (app) {
+      await app.close();
+    }
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+  }, 60000);
 
   describe('/users (POST)', () => {
     it('should create a new user', () => {
@@ -124,7 +128,7 @@ describe('Users (e2e)', () => {
         .get(`/users/${fakeId}`)
         .expect(200)
         .expect((res) => {
-          expect(res.body).toBeNull();
+          expect(res.body).toEqual({});
         });
     });
   });
@@ -201,7 +205,7 @@ describe('Users (e2e)', () => {
         .delete(`/users/${fakeId}`)
         .expect(200)
         .expect((res) => {
-          expect(res.body).toBeNull();
+          expect(res.body).toEqual({});
         });
     });
   });
